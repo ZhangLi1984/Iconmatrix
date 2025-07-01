@@ -8,13 +8,11 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- FontAwesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
-  <!-- p5.js -->
-  <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
   <style>
     /* Custom styles to ensure canvas is responsive within its container */
     #canvas-holder canvas {
         max-width: 100%;
-        height: auto !important; /* Important to override p5.js inline style for responsiveness */
+        height: auto !important; 
         border-radius: 0.75rem; /* Corresponds to rounded-xl */
     }
   </style>
@@ -83,200 +81,176 @@
         <i class="fa-regular fa-eye"></i> 实时预览
       </div>
       <div id="canvas-holder" class="rounded-xl overflow-hidden border border-gray-200 shadow-inner bg-gray-100 min-h-[180px] flex items-center justify-center">
-        <!-- p5.js canvas will be inserted here -->
+        <canvas id="preview-canvas"></canvas>
       </div>
     </div>
   </div>
 
   <script>
-    // Global variables
-    let iconImg;
-    let canvas;
-    let sketchState = 'initial'; // 'initial', 'loading', 'drawing'
-    let settings = {
-      width: 600,
-      height: 180,
-      rows: 2,
-      cols: 8,
-      iconSize: 32,
-      rotate: 0,
-      padX: 16,
-      padY: 16,
-      rowOffsets: [0, 0]
-    };
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- Global Variables ---
+        const canvas = document.getElementById('preview-canvas');
+        const ctx = canvas.getContext('2d');
+        const settingsContainer = document.getElementById('settings');
+        const iconUploadInput = document.getElementById('icon-upload');
+        const downloadBtn = document.getElementById('download-btn');
 
-    /**
-     * p5.js setup function: runs once at the beginning.
-     */
-    function setup() {
-      canvas = createCanvas(settings.width, settings.height);
-      canvas.parent('canvas-holder');
-      pixelDensity(2);
-      noLoop(); // We will manually trigger redraws.
-      
-      updateRowOffsetDOM(); // Create initial offset inputs
-      readAllSettingsFromDOM(); // Read initial settings
-      redraw(); // Trigger the first draw.
-    }
+        let iconImage = null; // This will hold the loaded Image object
+        let settings = {}; // To store all our parameters
 
-    /**
-     * p5.js draw function: This is the single entry point for all drawing operations.
-     * It is called once every time redraw() is triggered.
-     */
-    function draw() {
-        switch (sketchState) {
-            case 'initial':
-                drawInitialState();
-                break;
-            case 'loading':
-                drawLoadingState();
-                break;
-            case 'drawing':
-                resizeCanvas(settings.width, settings.height);
-                drawIcons();
-                break;
+        // --- Core Functions ---
+
+        /**
+         * Reads all values from the DOM and stores them in the 'settings' object.
+         */
+        function readAllSettingsFromDOM() {
+            settings.width = parseInt(document.getElementById('canvas-width').value) || 600;
+            settings.height = parseInt(document.getElementById('canvas-height').value) || 180;
+            settings.rows = parseInt(document.getElementById('rows').value) || 1;
+            settings.cols = parseInt(document.getElementById('cols').value) || 8;
+            settings.iconSize = parseInt(document.getElementById('icon-size').value) || 32;
+            settings.rotate = parseInt(document.getElementById('icon-rotate').value) || 0;
+            settings.padX = parseInt(document.getElementById('pad-x').value) || 16;
+            settings.padY = parseInt(document.getElementById('pad-y').value) || 16;
+            
+            const newOffsets = [];
+            document.querySelectorAll('.row-offset-input').forEach(input => {
+                newOffsets[parseInt(input.dataset.index)] = parseInt(input.value) || 0;
+            });
+            settings.rowOffsets = newOffsets;
         }
-    }
 
-    // --- Drawing Helper Functions ---
-
-    function drawInitialState() {
-        background(241, 245, 241);
-        fill(150);
-        textAlign(CENTER, CENTER);
-        textSize(16);
-        text('请上传一个Icon开始', width / 2, height / 2);
-    }
-    
-    function drawLoadingState() {
-        background(241, 245, 241);
-        fill(150);
-        textAlign(CENTER, CENTER);
-        textSize(16);
-        text('正在加载图片...', width / 2, height / 2);
-    }
-
-    function drawIcons() {
-      if (!iconImg) return; // Safety check
-      clear();
-      background(0, 0); // Transparent background
-      const startX = settings.padX + settings.iconSize / 2;
-      const startY = settings.padY + settings.iconSize / 2;
-      for (let r = 0; r < settings.rows; r++) {
-        const horizontalOffset = settings.rowOffsets[r] || 0;
-        for (let c = 0; c < settings.cols; c++) {
-          const x = startX + c * (settings.iconSize + settings.padX) + horizontalOffset;
-          const y = startY + r * (settings.iconSize + settings.padY);
-          push();
-          translate(x, y);
-          rotate(radians(settings.rotate));
-          imageMode(CENTER);
-          image(iconImg, 0, 0, settings.iconSize, settings.iconSize);
-          pop();
-        }
-      }
-    }
-    
-    // --- DOM & Settings Management ---
-
-    function readAllSettingsFromDOM() {
-        settings.width = parseInt(document.getElementById('canvas-width').value) || 600;
-        settings.height = parseInt(document.getElementById('canvas-height').value) || 180;
-        settings.rows = parseInt(document.getElementById('rows').value) || 1;
-        settings.cols = parseInt(document.getElementById('cols').value) || 8;
-        settings.iconSize = parseInt(document.getElementById('icon-size').value) || 32;
-        settings.rotate = parseInt(document.getElementById('icon-rotate').value) || 0;
-        settings.padX = parseInt(document.getElementById('pad-x').value) || 16;
-        settings.padY = parseInt(document.getElementById('pad-y').value) || 16;
-        
-        const newOffsets = [];
-        document.querySelectorAll('.row-offset-input').forEach(input => {
-            newOffsets[parseInt(input.dataset.index)] = parseInt(input.value) || 0;
-        });
-        settings.rowOffsets = newOffsets;
-    }
-
-    function updateRowOffsetDOM() {
-        const container = document.getElementById('row-offsets-container');
-        const newRowCount = parseInt(document.getElementById('rows').value) || 1;
-        
-        while (settings.rowOffsets.length < newRowCount) {
-            settings.rowOffsets.push(0);
-        }
-        settings.rowOffsets.length = newRowCount;
-
-        container.innerHTML = ''; 
-
-        for (let i = 0; i < newRowCount; i++) {
-            const div = document.createElement('div');
-            const label = document.createElement('label');
-            label.htmlFor = `row-offset-${i}`;
-            label.className = 'block text-sm font-medium text-gray-700 mb-1';
-            label.textContent = `第 ${i + 1} 行偏移`;
-            const input = document.createElement('input');
-            input.type = 'number';
-            input.id = `row-offset-${i}`;
-            input.className = 'row-offset-input rounded-lg px-2 py-1 border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 w-full';
-            input.value = settings.rowOffsets[i];
-            input.dataset.index = i;
-            div.appendChild(label);
-            div.appendChild(input);
-            container.appendChild(div);
-        }
-    }
-
-    // --- Event Listeners ---
-
-    document.getElementById('settings').addEventListener('input', function(e) {
-        if (e.target && e.target.type === 'number') {
-            if (e.target.id === 'rows') {
-                updateRowOffsetDOM();
-            }
+        /**
+         * The main drawing function. It clears and redraws the entire canvas.
+         */
+        function drawMatrix() {
             readAllSettingsFromDOM();
-            if (iconImg) {
-                sketchState = 'drawing';
+
+            // For high-DPI displays
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = settings.width * dpr;
+            canvas.height = settings.height * dpr;
+            canvas.style.width = `${settings.width}px`;
+            canvas.style.height = `${settings.height}px`;
+            ctx.scale(dpr, dpr);
+
+            // Clear canvas
+            ctx.clearRect(0, 0, settings.width, settings.height);
+
+            if (!iconImage) {
+                // Draw placeholder text if no image is loaded
+                ctx.fillStyle = '#9ca3af'; // gray-400
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.font = '16px sans-serif';
+                ctx.fillText('请上传一个Icon开始', settings.width / 2, settings.height / 2);
+                return;
             }
-            redraw();
-        }
-    });
 
-    document.getElementById('icon-upload').addEventListener('change', function(e) {
-      if (e.target.files && e.target.files[0]) {
-        sketchState = 'loading';
-        redraw(); // Show loading message immediately
+            // Draw the icon matrix
+            const startX = settings.padX + settings.iconSize / 2;
+            const startY = settings.padY + settings.iconSize / 2;
+            const angleInRadians = settings.rotate * Math.PI / 180;
 
-        let reader = new FileReader();
-        reader.onload = function(evt) {
-          iconImg = loadImage(evt.target.result, 
-            () => { // Success callback
-                readAllSettingsFromDOM(); // Read settings again in case they changed
-                sketchState = 'drawing';
-                redraw();
-            }, 
-            () => { // Failure callback
-                alert("无法加载该图片文件，请尝试其他图片。");
-                iconImg = null;
-                sketchState = 'initial';
-                redraw();
+            for (let r = 0; r < settings.rows; r++) {
+                const horizontalOffset = settings.rowOffsets[r] || 0;
+                for (let c = 0; c < settings.cols; c++) {
+                    const x = startX + c * (settings.iconSize + settings.padX) + horizontalOffset;
+                    const y = startY + r * (settings.iconSize + settings.padY);
+                    
+                    ctx.save();
+                    ctx.translate(x, y);
+                    ctx.rotate(angleInRadians);
+                    ctx.drawImage(iconImage, -settings.iconSize / 2, -settings.iconSize / 2, settings.iconSize, settings.iconSize);
+                    ctx.restore();
+                }
             }
-          );
         }
-        reader.readAsDataURL(e.target.files[0]);
-      }
-    });
 
-    document.getElementById('download-btn').addEventListener('click', function() {
-      if (!iconImg) {
-          alert("请先上传一个Icon再下载。");
-          return;
-      }
-      // To ensure the downloaded image is correct, we force one final redraw
-      readAllSettingsFromDOM();
-      sketchState = 'drawing';
-      redraw();
-      saveCanvas(canvas, 'icon-matrix', 'png');
-    });
+        /**
+         * Dynamically creates/updates DOM input fields for each row's offset.
+         */
+        function updateRowOffsetDOM() {
+            const container = document.getElementById('row-offsets-container');
+            const newRowCount = parseInt(document.getElementById('rows').value) || 1;
+            
+            // Get current values to preserve them
+            const currentOffsets = [];
+            document.querySelectorAll('.row-offset-input').forEach(input => {
+                currentOffsets[parseInt(input.dataset.index)] = input.value;
+            });
 
+            container.innerHTML = ''; 
+
+            for (let i = 0; i < newRowCount; i++) {
+                const div = document.createElement('div');
+                const label = document.createElement('label');
+                label.htmlFor = `row-offset-${i}`;
+                label.className = 'block text-sm font-medium text-gray-700 mb-1';
+                label.textContent = `第 ${i + 1} 行偏移`;
+                const input = document.createElement('input');
+                input.type = 'number';
+                input.id = `row-offset-${i}`;
+                input.className = 'row-offset-input rounded-lg px-2 py-1 border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 w-full';
+                input.value = currentOffsets[i] || 0; // Use preserved value or default to 0
+                input.dataset.index = i;
+                div.appendChild(label);
+                div.appendChild(input);
+                container.appendChild(div);
+            }
+        }
+
+        // --- Event Listeners ---
+
+        // Listen for any input change in the settings form
+        settingsContainer.addEventListener('input', (e) => {
+            if (e.target.type === 'number') {
+                if (e.target.id === 'rows') {
+                    updateRowOffsetDOM();
+                }
+                drawMatrix();
+            }
+        });
+
+        // Listen for file upload
+        iconUploadInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        iconImage = img; // Assign to global variable
+                        drawMatrix(); // Redraw with the new image
+                    };
+                    img.onerror = () => {
+                        alert("无法加载该图片文件，请尝试其他图片。");
+                        iconImage = null;
+                        drawMatrix();
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Listen for download button click
+        downloadBtn.addEventListener('click', () => {
+            if (!iconImage) {
+                alert("请先上传一个Icon再下载。");
+                return;
+            }
+            drawMatrix(); // Ensure canvas is up-to-date
+            const link = document.createElement('a');
+            link.download = 'icon-matrix.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        });
+
+        // --- Initial Setup ---
+        updateRowOffsetDOM();
+        drawMatrix();
+    });
   </script>
 </body>
 </html>
