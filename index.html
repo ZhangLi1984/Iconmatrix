@@ -92,6 +92,7 @@
     // Global variables
     let iconImg;
     let canvas;
+    let sketchState = 'initial'; // 'initial', 'loading', 'drawing'
     let settings = {
       width: 600,
       height: 180,
@@ -101,25 +102,43 @@
       rotate: 0,
       padX: 16,
       padY: 16,
-      rowOffsets: [0, 0] // Array to hold offset for each row
+      rowOffsets: [0, 0]
     };
 
     /**
-     * p5.js setup function
+     * p5.js setup function: runs once at the beginning.
      */
     function setup() {
       canvas = createCanvas(settings.width, settings.height);
       canvas.parent('canvas-holder');
       pixelDensity(2);
-      updateRowOffsetDOM(); // Initial generation of offset inputs
-      drawInitialState();
-      noLoop(); // We will redraw manually
+      noLoop(); // We will manually trigger redraws.
+      
+      updateRowOffsetDOM(); // Create initial offset inputs
+      readAllSettingsFromDOM(); // Read initial settings
+      redraw(); // Trigger the first draw.
     }
 
-    // p5.js draw function is empty because we use noLoop()
-    function draw() {}
+    /**
+     * p5.js draw function: This is the single entry point for all drawing operations.
+     * It is called once every time redraw() is triggered.
+     */
+    function draw() {
+        switch (sketchState) {
+            case 'initial':
+                drawInitialState();
+                break;
+            case 'loading':
+                drawLoadingState();
+                break;
+            case 'drawing':
+                resizeCanvas(settings.width, settings.height);
+                drawIcons();
+                break;
+        }
+    }
 
-    // --- Drawing Functions ---
+    // --- Drawing Helper Functions ---
 
     function drawInitialState() {
         background(241, 245, 241);
@@ -138,12 +157,9 @@
     }
 
     function drawIcons() {
-      if (!iconImg) {
-        drawInitialState();
-        return;
-      }
+      if (!iconImg) return; // Safety check
       clear();
-      background(0, 0);
+      background(0, 0); // Transparent background
       const startX = settings.padX + settings.iconSize / 2;
       const startY = settings.padY + settings.iconSize / 2;
       for (let r = 0; r < settings.rows; r++) {
@@ -163,9 +179,6 @@
     
     // --- DOM & Settings Management ---
 
-    /**
-     * Reads all values from DOM inputs and stores them in the global 'settings' object.
-     */
     function readAllSettingsFromDOM() {
         settings.width = parseInt(document.getElementById('canvas-width').value) || 600;
         settings.height = parseInt(document.getElementById('canvas-height').value) || 180;
@@ -183,30 +196,16 @@
         settings.rowOffsets = newOffsets;
     }
 
-    /**
-     * Re-draws the canvas based on the current 'settings' object.
-     */
-    function redrawCanvas() {
-        resizeCanvas(settings.width, settings.height);
-        drawIcons();
-    }
-
-    /**
-     * Dynamically creates/updates DOM input fields for each row's offset.
-     */
     function updateRowOffsetDOM() {
         const container = document.getElementById('row-offsets-container');
         const newRowCount = parseInt(document.getElementById('rows').value) || 1;
         
-        // Adjust the settings.rowOffsets array to match the new row count
         while (settings.rowOffsets.length < newRowCount) {
             settings.rowOffsets.push(0);
         }
-        if (settings.rowOffsets.length > newRowCount) {
-            settings.rowOffsets.length = newRowCount;
-        }
+        settings.rowOffsets.length = newRowCount;
 
-        container.innerHTML = ''; // Clear existing inputs
+        container.innerHTML = ''; 
 
         for (let i = 0; i < newRowCount; i++) {
             const div = document.createElement('div');
@@ -228,42 +227,53 @@
 
     // --- Event Listeners ---
 
-    // Primary event listener for all setting changes
     document.getElementById('settings').addEventListener('input', function(e) {
         if (e.target && e.target.type === 'number') {
-            // If the rows input changed, we need to update the DOM for offsets first
             if (e.target.id === 'rows') {
                 updateRowOffsetDOM();
             }
-            // Then, read all current settings from the DOM and redraw the canvas
             readAllSettingsFromDOM();
-            redrawCanvas();
+            if (iconImg) {
+                sketchState = 'drawing';
+            }
+            redraw();
         }
     });
 
-    // Listener for file upload
     document.getElementById('icon-upload').addEventListener('change', function(e) {
       if (e.target.files && e.target.files[0]) {
-        drawLoadingState();
+        sketchState = 'loading';
+        redraw(); // Show loading message immediately
+
         let reader = new FileReader();
         reader.onload = function(evt) {
-          iconImg = loadImage(evt.target.result, () => {
-            redrawCanvas(); // Use redrawCanvas for consistency
-          }, () => {
-            alert("无法加载该图片文件，请尝试其他图片。");
-            drawInitialState();
-          });
+          iconImg = loadImage(evt.target.result, 
+            () => { // Success callback
+                readAllSettingsFromDOM(); // Read settings again in case they changed
+                sketchState = 'drawing';
+                redraw();
+            }, 
+            () => { // Failure callback
+                alert("无法加载该图片文件，请尝试其他图片。");
+                iconImg = null;
+                sketchState = 'initial';
+                redraw();
+            }
+          );
         }
         reader.readAsDataURL(e.target.files[0]);
       }
     });
 
-    // Listener for download button
     document.getElementById('download-btn').addEventListener('click', function() {
       if (!iconImg) {
           alert("请先上传一个Icon再下载。");
           return;
       }
+      // To ensure the downloaded image is correct, we force one final redraw
+      readAllSettingsFromDOM();
+      sketchState = 'drawing';
+      redraw();
       saveCanvas(canvas, 'icon-matrix', 'png');
     });
 
