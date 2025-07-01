@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Icon矩阵排列生成器</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+  <!-- p5.js -->
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
+  <style>
+    /* Custom styles to ensure canvas is responsive within its container */
+    #canvas-holder canvas {
+        max-width: 100%;
+        height: auto !important; /* Important to override p5.js inline style for responsiveness */
+        border-radius: 0.75rem; /* Corresponds to rounded-xl */
+    }
+  </style>
+</head>
+<body class="bg-gray-50 font-sans min-h-screen flex items-center justify-center py-6 px-4">
+  <div class="bg-white rounded-2xl shadow-xl p-6 sm:p-8 w-full max-w-3xl">
+    <h1 class="text-2xl sm:text-3xl font-bold mb-4 flex items-center gap-3 text-gray-800">
+      <i class="fa-solid fa-grip text-blue-500"></i>
+      Icon矩阵排列生成器
+    </h1>
+    <p class="text-gray-500 mb-6">上传一个Icon，调整参数，然后下载你想要的矩阵图片。</p>
+    
+    <!-- Settings Form -->
+    <div id="settings" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-6 items-start">
+      <div class="col-span-full">
+        <label for="icon-upload" class="block text-sm font-medium text-gray-700 mb-1">上传Icon</label>
+        <input id="icon-upload" type="file" accept="image/*" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+      </div>
+      <div>
+        <label for="canvas-width" class="block text-sm font-medium text-gray-700 mb-1">画布宽(px)</label>
+        <input id="canvas-width" type="number" value="600" min="100" class="rounded-lg px-2 py-1 border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 w-full"/>
+      </div>
+      <div>
+        <label for="canvas-height" class="block text-sm font-medium text-gray-700 mb-1">画布高(px)</label>
+        <input id="canvas-height" type="number" value="180" min="100" class="rounded-lg px-2 py-1 border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 w-full"/>
+      </div>
+      <div>
+        <label for="rows" class="block text-sm font-medium text-gray-700 mb-1">行数</label>
+        <input id="rows" type="number" value="2" min="1" class="rounded-lg px-2 py-1 border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 w-full"/>
+      </div>
+      <div>
+        <label for="cols" class="block text-sm font-medium text-gray-700 mb-1">列数</label>
+        <input id="cols" type="number" value="8" min="1" class="rounded-lg px-2 py-1 border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 w-full"/>
+      </div>
+      <div>
+        <label for="icon-size" class="block text-sm font-medium text-gray-700 mb-1">Icon大小(px)</label>
+        <input id="icon-size" type="number" value="32" min="1" class="rounded-lg px-2 py-1 border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 w-full"/>
+      </div>
+      <div>
+        <label for="icon-rotate" class="block text-sm font-medium text-gray-700 mb-1">Icon旋转(°)</label>
+        <input id="icon-rotate" type="number" value="0" min="0" max="360" class="rounded-lg px-2 py-1 border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 w-full"/>
+      </div>
+      <div>
+        <label for="pad-x" class="block text-sm font-medium text-gray-700 mb-1">左右间隙(px)</label>
+        <input id="pad-x" type="number" value="16" min="0" class="rounded-lg px-2 py-1 border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 w-full"/>
+      </div>
+      <div>
+        <label for="pad-y" class="block text-sm font-medium text-gray-700 mb-1">上下间隙(px)</label>
+        <input id="pad-y" type="number" value="16" min="0" class="rounded-lg px-2 py-1 border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 w-full"/>
+      </div>
+      
+      <!-- Container for dynamic row offset inputs -->
+      <div id="row-offsets-container" class="col-span-full grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mt-2">
+      </div>
+
+      <div class="col-span-full flex justify-end mt-4">
+        <button type="button" id="download-btn" class="w-full sm:w-auto px-5 py-2.5 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-lg shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2">
+          <i class="fa-solid fa-download"></i> 下载PNG
+        </button>
+      </div>
+    </div>
+    
+    <!-- Canvas Preview -->
+    <div>
+      <div class="mb-2 text-gray-600 text-sm font-medium flex items-center gap-2">
+        <i class="fa-regular fa-eye"></i> 实时预览
+      </div>
+      <div id="canvas-holder" class="rounded-xl overflow-hidden border border-gray-200 shadow-inner bg-gray-100 min-h-[180px] flex items-center justify-center">
+        <!-- p5.js canvas will be inserted here -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Global variables
+    let iconImg;
+    let canvas;
+    let settings = {
+      width: 600,
+      height: 180,
+      rows: 2,
+      cols: 8,
+      iconSize: 32,
+      rotate: 0,
+      padX: 16,
+      padY: 16,
+      rowOffsets: [0, 0] // Array to hold offset for each row
+    };
+
+    /**
+     * p5.js setup function
+     */
+    function setup() {
+      canvas = createCanvas(settings.width, settings.height);
+      canvas.parent('canvas-holder');
+      pixelDensity(2);
+      updateRowOffsetDOM(); // Initial generation of offset inputs
+      drawInitialState();
+      noLoop(); // We will redraw manually
+    }
+
+    // p5.js draw function is empty because we use noLoop()
+    function draw() {}
+
+    // --- Drawing Functions ---
+
+    function drawInitialState() {
+        background(241, 245, 241);
+        fill(150);
+        textAlign(CENTER, CENTER);
+        textSize(16);
+        text('请上传一个Icon开始', width / 2, height / 2);
+    }
+    
+    function drawLoadingState() {
+        background(241, 245, 241);
+        fill(150);
+        textAlign(CENTER, CENTER);
+        textSize(16);
+        text('正在加载图片...', width / 2, height / 2);
+    }
+
+    function drawIcons() {
+      if (!iconImg) {
+        drawInitialState();
+        return;
+      }
+      clear();
+      background(0, 0);
+      const startX = settings.padX + settings.iconSize / 2;
+      const startY = settings.padY + settings.iconSize / 2;
+      for (let r = 0; r < settings.rows; r++) {
+        const horizontalOffset = settings.rowOffsets[r] || 0;
+        for (let c = 0; c < settings.cols; c++) {
+          const x = startX + c * (settings.iconSize + settings.padX) + horizontalOffset;
+          const y = startY + r * (settings.iconSize + settings.padY);
+          push();
+          translate(x, y);
+          rotate(radians(settings.rotate));
+          imageMode(CENTER);
+          image(iconImg, 0, 0, settings.iconSize, settings.iconSize);
+          pop();
+        }
+      }
+    }
+    
+    // --- DOM & Settings Management ---
+
+    /**
+     * Reads all values from DOM inputs and stores them in the global 'settings' object.
+     */
+    function readAllSettingsFromDOM() {
+        settings.width = parseInt(document.getElementById('canvas-width').value) || 600;
+        settings.height = parseInt(document.getElementById('canvas-height').value) || 180;
+        settings.rows = parseInt(document.getElementById('rows').value) || 1;
+        settings.cols = parseInt(document.getElementById('cols').value) || 8;
+        settings.iconSize = parseInt(document.getElementById('icon-size').value) || 32;
+        settings.rotate = parseInt(document.getElementById('icon-rotate').value) || 0;
+        settings.padX = parseInt(document.getElementById('pad-x').value) || 16;
+        settings.padY = parseInt(document.getElementById('pad-y').value) || 16;
+        
+        const newOffsets = [];
+        document.querySelectorAll('.row-offset-input').forEach(input => {
+            newOffsets[parseInt(input.dataset.index)] = parseInt(input.value) || 0;
+        });
+        settings.rowOffsets = newOffsets;
+    }
+
+    /**
+     * Re-draws the canvas based on the current 'settings' object.
+     */
+    function redrawCanvas() {
+        resizeCanvas(settings.width, settings.height);
+        drawIcons();
+    }
+
+    /**
+     * Dynamically creates/updates DOM input fields for each row's offset.
+     */
+    function updateRowOffsetDOM() {
+        const container = document.getElementById('row-offsets-container');
+        const newRowCount = parseInt(document.getElementById('rows').value) || 1;
+        
+        // Adjust the settings.rowOffsets array to match the new row count
+        while (settings.rowOffsets.length < newRowCount) {
+            settings.rowOffsets.push(0);
+        }
+        if (settings.rowOffsets.length > newRowCount) {
+            settings.rowOffsets.length = newRowCount;
+        }
+
+        container.innerHTML = ''; // Clear existing inputs
+
+        for (let i = 0; i < newRowCount; i++) {
+            const div = document.createElement('div');
+            const label = document.createElement('label');
+            label.htmlFor = `row-offset-${i}`;
+            label.className = 'block text-sm font-medium text-gray-700 mb-1';
+            label.textContent = `第 ${i + 1} 行偏移`;
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.id = `row-offset-${i}`;
+            input.className = 'row-offset-input rounded-lg px-2 py-1 border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 w-full';
+            input.value = settings.rowOffsets[i];
+            input.dataset.index = i;
+            div.appendChild(label);
+            div.appendChild(input);
+            container.appendChild(div);
+        }
+    }
+
+    // --- Event Listeners ---
+
+    // Primary event listener for all setting changes
+    document.getElementById('settings').addEventListener('input', function(e) {
+        if (e.target && e.target.type === 'number') {
+            // If the rows input changed, we need to update the DOM for offsets first
+            if (e.target.id === 'rows') {
+                updateRowOffsetDOM();
+            }
+            // Then, read all current settings from the DOM and redraw the canvas
+            readAllSettingsFromDOM();
+            redrawCanvas();
+        }
+    });
+
+    // Listener for file upload
+    document.getElementById('icon-upload').addEventListener('change', function(e) {
+      if (e.target.files && e.target.files[0]) {
+        drawLoadingState();
+        let reader = new FileReader();
+        reader.onload = function(evt) {
+          iconImg = loadImage(evt.target.result, () => {
+            redrawCanvas(); // Use redrawCanvas for consistency
+          }, () => {
+            alert("无法加载该图片文件，请尝试其他图片。");
+            drawInitialState();
+          });
+        }
+        reader.readAsDataURL(e.target.files[0]);
+      }
+    });
+
+    // Listener for download button
+    document.getElementById('download-btn').addEventListener('click', function() {
+      if (!iconImg) {
+          alert("请先上传一个Icon再下载。");
+          return;
+      }
+      saveCanvas(canvas, 'icon-matrix', 'png');
+    });
+
+  </script>
+</body>
+</html>
