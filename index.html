@@ -9,11 +9,17 @@
   <!-- FontAwesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
   <style>
-    /* Custom styles to ensure canvas is responsive within its container */
+    /* Custom styles for the canvas */
     #canvas-holder canvas {
         max-width: 100%;
-        height: auto !important; 
+        /* 移除了 height: auto; 样式，由JS完全控制高度 */
+        display: block; /* 推荐的canvas样式 */
         border-radius: 0.75rem; /* Corresponds to rounded-xl */
+    }
+    /* Style for the file input label when uploading */
+    .uploading {
+        color: #2563eb; /* blue-600 */
+        font-weight: 600;
     }
   </style>
 </head>
@@ -93,6 +99,7 @@
         const ctx = canvas.getContext('2d');
         const settingsContainer = document.getElementById('settings');
         const iconUploadInput = document.getElementById('icon-upload');
+        const iconUploadLabel = document.querySelector('label[for="icon-upload"]');
         const downloadBtn = document.getElementById('download-btn');
 
         let iconImage = null; // This will hold the loaded Image object
@@ -174,7 +181,6 @@
             const container = document.getElementById('row-offsets-container');
             const newRowCount = parseInt(document.getElementById('rows').value) || 1;
             
-            // Get current values to preserve them
             const currentOffsets = [];
             document.querySelectorAll('.row-offset-input').forEach(input => {
                 currentOffsets[parseInt(input.dataset.index)] = input.value;
@@ -192,7 +198,7 @@
                 input.type = 'number';
                 input.id = `row-offset-${i}`;
                 input.className = 'row-offset-input rounded-lg px-2 py-1 border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 w-full';
-                input.value = currentOffsets[i] || 0; // Use preserved value or default to 0
+                input.value = currentOffsets[i] || 0;
                 input.dataset.index = i;
                 div.appendChild(label);
                 div.appendChild(input);
@@ -202,7 +208,6 @@
 
         // --- Event Listeners ---
 
-        // Listen for any input change in the settings form
         settingsContainer.addEventListener('input', (e) => {
             if (e.target.type === 'number') {
                 if (e.target.id === 'rows') {
@@ -212,21 +217,37 @@
             }
         });
 
-        // Listen for file upload
         iconUploadInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
+                const originalLabelText = iconUploadLabel.textContent;
+                iconUploadLabel.textContent = '正在加载图片...';
+                iconUploadLabel.classList.add('uploading');
+
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     const img = new Image();
                     img.onload = () => {
-                        iconImage = img; // Assign to global variable
-                        drawMatrix(); // Redraw with the new image
+                        iconImage = img;
+                        drawMatrix();
+                        iconUploadLabel.textContent = originalLabelText;
+                        iconUploadLabel.classList.remove('uploading');
                     };
                     img.onerror = () => {
-                        alert("无法加载该图片文件，请尝试其他图片。");
+                        const originalBtnHTML = downloadBtn.innerHTML;
+                        downloadBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> 图片加载失败';
+                        downloadBtn.classList.add('bg-red-500', 'hover:bg-red-600');
+                        downloadBtn.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+                        setTimeout(() => {
+                            downloadBtn.innerHTML = originalBtnHTML;
+                            downloadBtn.classList.remove('bg-red-500', 'hover:bg-red-600');
+                            downloadBtn.classList.add('bg-blue-500', 'hover:bg-blue-600');
+                        }, 3000);
+
                         iconImage = null;
                         drawMatrix();
+                        iconUploadLabel.textContent = originalLabelText;
+                        iconUploadLabel.classList.remove('uploading');
                     };
                     img.src = event.target.result;
                 };
@@ -234,13 +255,20 @@
             }
         });
 
-        // Listen for download button click
         downloadBtn.addEventListener('click', () => {
             if (!iconImage) {
-                alert("请先上传一个Icon再下载。");
+                const originalBtnHTML = downloadBtn.innerHTML;
+                downloadBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> 请先上传Icon';
+                downloadBtn.classList.add('bg-red-500', 'hover:bg-red-600');
+                downloadBtn.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+                setTimeout(() => {
+                    downloadBtn.innerHTML = originalBtnHTML;
+                    downloadBtn.classList.remove('bg-red-500', 'hover:bg-red-600');
+                    downloadBtn.classList.add('bg-blue-500', 'hover:bg-blue-600');
+                }, 2000);
                 return;
             }
-            drawMatrix(); // Ensure canvas is up-to-date
+            drawMatrix();
             const link = document.createElement('a');
             link.download = 'icon-matrix.png';
             link.href = canvas.toDataURL('image/png');
